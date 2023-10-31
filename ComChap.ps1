@@ -3,14 +3,14 @@
     [string]$outfile,
     [switch]$keepEdl,
     [switch]$keepMeta,
-    [string]$ffmpegPath = ".\ffmpeg.exe",
-    [string]$comskipPath = ".\comskip.exe",
+    [string]$ffmpegPath = "$PSScriptRoot\ffmpeg.exe",
+    [string]$comskipPath = "PSScriptRoot\comskip.exe",
     [string]$comskipini = "$env:USERPROFILE\.comskip.ini",
     [string]$lockfile,
     [string]$workdir
 )
 if (-not $infile) {
-    $exename = Split-Path -Leaf $MyInvocation.MyCommand.Path
+    $exename = Split-Path -Leaf $PSCommandPath
     Write-Host "Add chapters to video file using EDL file"
     Write-Host "     (If no EDL file is found, comskip will be used to generate one)"
     Write-Host ""
@@ -39,7 +39,7 @@ if (-not $outfile) {
     $outfile = $infile
 }
 $outdir = Split-Path $outfile -Parent
-$outextension = $outfile -split "\." | Select-Object -Last 1
+$outextension = ".$($outfile.Split(".")[-1])"
 $comskipoutput = ""
 if ($workdir) {
     if (!($workdir.EndsWith("\"))) {
@@ -84,61 +84,66 @@ foreach ($line in $lines) {
         Add-Content -Path $metafile ";FFMETADATA1"
         Add-Content -Path $metafile "[CHAPTER]"
         Add-Content -Path $metafile "TIMEBASE=1/1000"
-        Add-Content -Path $metafile "START=$([int]($start * 1000 - $totalcutduration * 1000))"
-        Add-Content -Path $metafile "END=$([int]($end * 1000 - $totalcutduration * 1000))"
+        Add-Content -Path $metafile "START=$([int]($start * 1000))"
+        Add-Content -Path $metafile "END=$([int]($end * 1000))"
         Add-Content -Path $metafile "title=Chapter $i"
-        $chapterfile = "$($infile -replace '\.[^.]+$').part-$i.ts"
-        if ($workdir) {
-            $chapterfile = Split-Path $chapterfile -Leaf
-            $chapterfile = "$workdir$chapterfile"
-        }
-        $tempfiles += $chapterfile
-        $concat += "|$chapterfile"
-        $duration = [double]$end - [double]$start
-        & $ffmpegPath -hide_banner -loglevel error -nostdin -i $infile -ss $start -t $duration -c copy -y $chapterfile
-        $totalcutduration += $startnext - $end
+        Add-Content -Path $metafile ";FFMETADATA1"
+        Add-Content -Path $metafile "[CHAPTER]"
+        Add-Content -Path $metafile "TIMEBASE=1/1000"
+        Add-Content -Path $metafile "START=$([int]($end * 1000))"
+        Add-Content -Path $metafile "END=$([int]($startnext * 1000))"
+        Add-Content -Path $metafile "title=Commercials $i"
     }
     $start = $startnext
 }
 if ($hascommercials) {
+    $i++
     $endstring = & $ffmpegPath -hide_banner -nostdin -i $infile 2>&1 | Select-String -Pattern "Duration" | ForEach-Object { $_ -replace '\D+(\d+:\d+:\d+.\d+),.*', '$1' }
     $end=([TimeSpan]::Parse($endstring)).TotalSeconds
-    if ([double]$end * 1000 -gt [double]$start * 1000) {
-        $i++
-        Add-Content -Path $metafile "[CHAPTER]"
-        Add-Content -Path $metafile "TIMEBASE=1/1000"
-        Add-Content -Path $metafile "START=$([int]($start * 1000))"
-        Add-Content -Path $metafile "END=$([int]($end * 1000))"
-        Add-Content -Path $metafile "title=Chapter $i"
+    $i++
+    Add-Content -Path $metafile "[CHAPTER]"
+    Add-Content -Path $metafile "TIMEBASE=1/1000"
+    Add-Content -Path $metafile "START=$([int]($start * 1000))"
+    Add-Content -Path $metafile "END=$([int]($end * 1000))"
+    Add-Content -Path $metafile "title=Chapter $i"
+    If($infile -eq $outfile) {
+        $tempfile="$outdir\$(New-Guid)$outextension" 
+        echo "Writing file to temporary file: $tempfile"
+        try {& $ffmpegPath -loglevel error -hide_banner -nostdin -i $infile -i $metafile -map_metadata 1 -codec copy -y $tempfile
+            Move-Item $tempfile $outfile -Force -Confirm:$False
+            echo "Saved to: $outfile"
+        } catch { echo "Error running ffmpeg: $infile" }
     }
+  else {
     try {& $ffmpegPath -hide_banner -loglevel error -nostdin -i $infile -i $metafile -c copy -map_metadata 1 -y $outfile}
     catch {Write-Host "Error running ffmpeg: $infile"}
+    }
 }
 If (!(Test-Path $outfile)) {
     Write-Error "Error, $outfile does not exist."
     Exit 1
 }
 foreach ($tempfile in $tempfiles) {
-    Remove-Item -Path $tempfile
+    Remove-Item -Path $tempfile -ErrorAction SilentlyContinue
 }
 if ($deleteedl) {
-     Remove-Item -Path $edlfile
+     Remove-Item -Path $edlfile -ErrorAction SilentlyContinue
 }
 if ($deletemeta) {
-     Remove-Item -Path $metafile
+     Remove-Item -Path $metafile -ErrorAction SilentlyContinue
 }
 if ($deletelog) {
-     Remove-Item -Path $logfile
+     Remove-Item -Path $logfile -ErrorAction SilentlyContinue
 }
 if ($deletelogo) {
-     Remove-Item -Path $logofile
+     Remove-Item -Path $logofile -ErrorAction SilentlyContinue
 }
 if ($deletetxt) {
-     Remove-Item -Path $txtfile
+     Remove-Item -Path $txtfile -ErrorAction SilentlyContinue
 }
 if ($ldPath) {
     $env:LD_LIBRARY_PATH = $ldPath
 }
 if ($lockfile) {
-    Remove-Item -Path $lockfile
+    Remove-Item -Path $lockfile -ErrorAction SilentlyContinue
 }

@@ -3,14 +3,14 @@
     [string]$outfile,
     [switch]$keepEdl,
     [switch]$keepMeta,
-    [string]$ffmpegPath = ".\ffmpeg.exe",
-    [string]$comskipPath = ".\comskip.exe",
+    [string]$ffmpegPath = "$PSScriptRoot\ffmpeg.exe",
+    [string]$comskipPath = "$PSScriptRoot\comskip.exe",
     [string]$comskipini = "$env:USERPROFILE\.comskip.ini",
     [string]$lockfile,
     [string]$workdir
 )
 if (-not $infile) {
-    $exename = Split-Path -Leaf $MyInvocation.MyCommand.Path
+    $exename = Split-Path -Leaf $PSCommandPath
     Write-Host "Remove commercial from video file using EDL file"
     Write-Host "     (If no EDL file is found, comskip will be used to generate one)"
     Write-Host ""
@@ -68,7 +68,7 @@ elseif ((Get-Content $comskipIni) -notcontains "output_edl=1") {
     "output_edl=1" | Add-Content -Encoding utf8 $comskipIni
 }
 if (-not (Test-Path $edlfile)) {
-    & "$comskipPath" $comskipoutput --ini="$comskipIni" "$infile"
+    & "$comskipPath" $comskipoutput --ini="$comskipIni" "$infile" 2>&1
 }
 $start = 0
 $i = 0
@@ -128,26 +128,26 @@ If (!(Test-Path $outfile)) {
     Exit 1
 }
 foreach ($tempfile in $tempfiles) {
-    Remove-Item -Path $tempfile
+    Remove-Item -Path $tempfile -ErrorAction SilentlyContinue
 }
 if ($deleteedl) {
-     Remove-Item -Path $edlfile
+     Remove-Item -Path $edlfile -ErrorAction SilentlyContinue
 }
 if ($deletemeta) {
-     Remove-Item -Path $metafile
+     Remove-Item -Path $metafile -ErrorAction SilentlyContinue
 }
 if ($deletelog) {
-     Remove-Item -Path $logfile
+     Remove-Item -Path $logfile -ErrorAction SilentlyContinue
 }
 if ($deletelogo) {
-     Remove-Item -Path $logofile
+     Remove-Item -Path $logofile -ErrorAction SilentlyContinue
 }
 if ($deletetxt) {
-     Remove-Item -Path $txtfile
+     Remove-Item -Path $txtfile -ErrorAction SilentlyContinue
 }
 if ($ldPath) {
     $env:LD_LIBRARY_PATH = $ldPath
 }
 if ($lockfile) {
-    Remove-Item -Path $lockfile
+    Remove-Item -Path $lockfile -ErrorAction SilentlyContinue
 }
